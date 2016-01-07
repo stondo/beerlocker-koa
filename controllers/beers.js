@@ -2,15 +2,28 @@
 
 let koaRouter = require('koa-router'),	
 	db = require('../lib/mongodb.js'),
+	service = require('../lib/genericCoMonkApi.js'),
 	auth = require('../auth.js');
 
 let beersRouter = koaRouter();
 
 
-beersRouter.get('/api/beers', auth.isAuthenticated, function* (next) {
+/*beersRouter.get('/api/beers', auth.isAuthenticated, function* (next) {
 
 	try {
 		this.body = yield db.beers.find({});
+		this.type = 'json';
+		this.status = 200;
+	} catch(ex) {
+		console.log('Error: ', ex);
+	}
+
+});*/
+
+beersRouter.get('/api/beers', auth.isAuthenticated, function* (next) {
+
+	try {
+		this.body = yield service.getAll('beers');
 		this.type = 'json';
 		this.status = 200;
 	} catch(ex) {

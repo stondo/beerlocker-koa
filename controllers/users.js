@@ -24,7 +24,7 @@ usersRouter.get('/api/users', auth.isAuthenticated, function* (next) {
 });
 
 usersRouter.get('/api/users/:id', auth.isAuthenticated, function* (next) {
-
+	console.log(this.params.id);
 	try {
 		this.body = yield users.findById(this.params.id);
 		this.type = 'json';

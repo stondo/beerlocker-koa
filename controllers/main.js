@@ -7,7 +7,7 @@ let passport = require('koa-passport'),
 
 let mainRouter = koaRouter();
 
-mainRouter.get('/', function* () {
+mainRouter.get('/', auth.isAuthenticated, function* () {
 
 	this.body = { message: 'You are running dangerously low on beer!' };
 	this.type = 'json';
