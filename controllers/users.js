@@ -2,19 +2,18 @@
 
 let koaRouter = require('koa-router'),	
 	auth = require('../auth.js'),
-	users = require('../lib/mongodb.js').users,
-	bcrypt = require('co-bcrypt');
+	mongo = require('../lib/genericCoMonkApi.js'),
+	UserModel = require('../lib/models.js').User,
+	utils = require('../utils.js');
+	
 
 let usersRouter = koaRouter();
 
-// usersRouter.get('/', function* (next) {
-// 	this.body = '<h3><You are not allowed to access this API. Please login./h3>';		
-// });
 
 usersRouter.get('/api/users', auth.isAuthenticated, function* (next) {
 
 	try {
-		this.body = yield users.find({});
+		this.body = yield mongo.getAll('users');
 		this.type = 'json';
 		this.status = 200;
 	} catch(ex) {
@@ -24,9 +23,9 @@ usersRouter.get('/api/users', auth.isAuthenticated, function* (next) {
 });
 
 usersRouter.get('/api/users/:id', auth.isAuthenticated, function* (next) {
-	console.log(this.params.id);
+	
 	try {
-		this.body = yield users.findById(this.params.id);
+		this.body = yield mongo.getById('users', this.params.id);
 		this.type = 'json';
 		this.status = 200;
 	} catch(ex) {
@@ -35,42 +34,26 @@ usersRouter.get('/api/users/:id', auth.isAuthenticated, function* (next) {
 	
 });
 
-// Test to see if multiple parametrs GET request works
-// usersRouter.get('/api/users/:username/:role', auth.isAuthenticated, function* (next) {
-
-// 	try {
-// 		this.body = yield users.find(this.params.username, this.params.role);
-// 		this.type = 'json';
-// 		this.status = 200;
-// 	} catch(ex) {
-// 		console.log('Error: ', ex);
-// 	}
-	
-// });
-
-
  usersRouter.post('/api/users', auth.isAuthenticated, function* (next) {	
-// usersRouter.post('/api/users', function* (next) {	
 
-	console.log('dentro creazione user');
-	let user = this.request.body;
-	console.log(user);
+	let body = this.request.body;
+
+	let userModelParams = Object.keys(body).map((k) => body[k]);
+	
+	let user = new UserModel(...userModelParams);
 
 	if (!user.username) {
-	    throw('username required', 400);
+	    this.throw('username required', 400);
 	}
 
 	if (!user.password) {
-	    throw('password required', 400);
+	    this.throw('password required', 400);
 	}
 
-	let salt = yield bcrypt.genSalt(10);
-	let hash = yield bcrypt.hash(user.password, salt);
-	user.password = hash;
+	yield user.hashPassword();
 	
 	try {		
-		console.log('hashed password: ', user);
-		yield users.insert(user);
+		yield mongo.insert('users', user);
 		this.status = 201;
 	} catch(ex) {
 		console.log('Error: ', ex);
@@ -79,13 +62,17 @@ usersRouter.get('/api/users/:id', auth.isAuthenticated, function* (next) {
 });
 
 usersRouter.put('/api/users/:id', auth.isAuthenticated, function* (next) {
+    
+    let updateExpr = this.request.body;
 
+    if ('password' in updateExpr) {
+		updateExpr.password = yield utils.hashPassword(updateExpr.password);
+	}
+	
 	try {
-		if (this.request.body.qty) {
-			yield users.updateById(this.params.id, { $set: { qty: this.request.body.qty } });
-			this.type = 'json';
-			this.status = 200;	
-		}
+		yield mongo.update('users', this.params.id, updateExpr);
+		this.type = 'json';
+		this.status = 200;			
 		
 	} catch(ex) {
 		console.log('Error: ', ex);
@@ -96,7 +83,7 @@ usersRouter.put('/api/users/:id', auth.isAuthenticated, function* (next) {
 usersRouter.del('/api/users/:id', auth.isAuthenticated, function* (next) {
 
 	try {		
-		yield users.remove({ _id: this.params.id });
+		yield mongo.removeOne('users', { _id: this.params.id });
 		this.type = 'json';
 		this.status = 204;		
 	} catch(ex) {

@@ -1,17 +1,17 @@
 'use strict';
 
 let koaRouter = require('koa-router'),	
-	db = require('../lib/mongodb.js'),
-	bcrypt = require('co-bcrypt'),
+	mongo = require('../lib/genericCoMonkApi.js'),
+	ClientModel = require('../lib/models.js').Client,
 	auth = require('../auth.js');
 
 let clientsRouter = koaRouter();
 
 
-/*clientsRouter.get('/api/beers', auth.isAuthenticated, function* (next) {
+/*clientsRouter.get('/api/clients', auth.isAuthenticated, function* (next) {
 
 	try {
-		this.body = yield beers.find({});
+		this.body = yield clients.find({});
 		this.type = 'json';
 		this.status = 200;
 	} catch(ex) {
@@ -23,7 +23,7 @@ let clientsRouter = koaRouter();
 clientsRouter.get('/api/clients', auth.isAuthenticated, function* (next) {
 
 	try {		
-		this.body = yield db.clients.find({ userId: this.req.user._id });
+		this.body = yield mongo.getOne('clients', { userId: this.req.user._id });
 		this.type = 'json';
 		this.status = 200;
 	} catch(ex) {
@@ -32,11 +32,11 @@ clientsRouter.get('/api/clients', auth.isAuthenticated, function* (next) {
 	
 });
 
-/*clientsRouter.put('/api/beers/:id', auth.isAuthenticated, koaBody, function* (next) {
+/*clientsRouter.put('/api/clients/:id', auth.isAuthenticated, koaBody, function* (next) {
 
 	try {
 		if (this.request.body.qty) {
-			yield beers.updateById(this.params.id, { $set: { qty: this.request.body.qty } });
+			yield clients.updateById(this.params.id, { $set: { qty: this.request.body.qty } });
 			this.type = 'json';
 			this.status = 200;	
 		}
@@ -47,10 +47,10 @@ clientsRouter.get('/api/clients', auth.isAuthenticated, function* (next) {
 
 });*/
 
-/*clientsRouter.del('/api/beers/:id', auth.isAuthenticated, koaBody, function* (next) {
+/*clientsRouter.del('/api/clients/:id', auth.isAuthenticated, koaBody, function* (next) {
 
 	try {		
-		yield beers.remove({ _id: this.params.id });
+		yield clients.remove({ _id: this.params.id });
 		this.type = 'json';
 		this.status = 204;		
 	} catch(ex) {
@@ -63,34 +63,34 @@ clientsRouter.get('/api/clients', auth.isAuthenticated, function* (next) {
 clientsRouter.post('/api/clients', auth.isAuthenticated, function* (next) {	
 
 	//console.log('req user id', this.req.user._id);
-	let client = this.request.body;
-	client.userId = this.req.user._id;
+	let body = this.request.body;
+	body.userId = this.req.user._id;
 
-	console.log(client);
+	let clientModelParams = Object.keys(body).map((k) => body[k]);
+
+	let client = new ClientModel(...clientModelParams);
 
 	if (!client.id) {
-		throw('id required', 400);
+		this.throw('id required', 400);
 	}
 
 	if (!client.name) {
-		throw('name required', 400);
+		this.throw('name required', 400);
 	}
 
 	if (!client.secret) {
-		throw('secret required', 400);
+		this.throw('secret required', 400);
 	}
 
 	if (!client.userId) {
-		throw('id userId', 400);
+		this.throw('id userId', 400);
 	}	
 	
+	client.hashSecret();
 
-	let salt = yield bcrypt.genSalt(10);
-	let hash = yield bcrypt.hash(client.secret, salt);
-	client.secret = hash;	
 	
 	try {
-		yield clients.insert(client);
+		yield mongo.insert('clients', client);
 		this.status = 201;
 	} catch(ex) {
 		console.log('Error: ', ex);

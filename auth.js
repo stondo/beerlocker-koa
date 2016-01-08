@@ -2,23 +2,19 @@
 
 let passport = require('koa-passport'),    
     co = require('co'),
-    db = require('./lib/mongodb.js'),
+    mongo = require('./lib/genericCoMonkApi.js'),    
+
+    /*db = require('./lib/mongodb.js'),  */
+
     models = require('./lib/models.js'),
     bcrypt = require('co-bcrypt'),
     oauth2orize = require('koa-oauth2orize'),
     login = require("koa-ensure-login"),
-    utils = require('./lib/utils.js'),
+    utils = require('./utils.js'),
     compose = require('koa-compose');
-    
-
-// Loop over wrapped monk mongo collections
-/*Object.keys(db).forEach(function(key) {
-  //var val = db[key];
-  console.log(key);
-});*/
 
 
-// User
+/*// User
 function *getUserByUsername(username) {
   let user = yield db.users.findOne({ username: username });
   return user;
@@ -71,7 +67,7 @@ function *getToken(accessToken) {
 
 function *insertToken(token) {
   return yield db.tokens.insert(token);  
-};
+};*/
 
 
 
@@ -111,7 +107,8 @@ passport.use('basic', new BasicStrategy( (username, password, done) => {
   console.log('passo da basic');
   co(function *() {
     try {
-      let user = yield getUserByUsername(username);
+      /*let user = yield getUserByUsername(username);*/
+      let user = yield mongo.getOne('users', { username : username });
       if (yield bcrypt.compare(password, user.password)) {
         return user;
       } else {
@@ -135,11 +132,15 @@ passport.use('client-basic', new ClientBasicStrategy( (username, password, done)
   console.log('passo da client basic');
   co(function *() {
     try {
-      let client = yield getClientByClientName(username);
+      /*let client = yield getClientByClientName(username);*/
+      console.log(username);
+      let client = yield mongo.getOne('clients', { id : username });
       console.log('client: ', client);
       if (yield bcrypt.compare(password, client.secret)) {
+        console.log('if');
         return client;
       } else {
+        console.log('else');
           return null;    
         }
     } catch (ex) {
@@ -160,12 +161,17 @@ passport.use('bearer', new BearerStrategy( (accessToken, done) => {
   console.log('passo da bearer');
   co(function *() {
     try {
-      let token = yield getToken(accessToken);
+      /*let token = yield getToken(accessToken);*/
+      let token = yield mongo.getOne('tokens', { value: accessToken });
       console.log('token found: ', token, token.userId);
       //let user = yield getUser(token.userId);
-      let client = yield getClient(token.clientId);
+
+      /*let client = yield getClient(token.clientId);*/
+      let client = yield mongo.getOne('clients', { _id: token.clientId} );
       console.log('client found: ', client);
+
       return client;      
+
     } catch (ex) {
       console.log('error: ', ex);
       return null;
@@ -193,9 +199,9 @@ oAuth2Srv.serializeClient((client, done) => {
 oAuth2Srv.deserializeClient((id, done) => {
   console.log('DESERIALIZING CLIENT', id);
   co(function *() {
-    try {
-      // let client = yield getClient(id);
-      let client = yield getClientById(id);
+    try {      
+      //let client = yield getClientById(id);
+      let client = yield mongo.getOne('clients', { id: id });
       return client;      
     } catch (ex) {
       console.log('error: ', ex);
@@ -216,6 +222,7 @@ oAuth2Srv.grant(oauth2orize.grant.code( (client, redirectUri, user, ares, done) 
   console.log('redirectUri: ', redirectUri);
   console.log('user: ', user);
   console.log('ares: ', ares);
+
   // Create a new authorization code
   let code = new models.Code(
     utils.uid(16),
@@ -227,7 +234,8 @@ oAuth2Srv.grant(oauth2orize.grant.code( (client, redirectUri, user, ares, done) 
   // Save the auth code and check for errors
   co(function *() {
     try {
-      yield insertCode(code);
+      /*yield insertCode(code);*/
+      yield mongo.insert('codes', code);
     } catch (ex) {
       console.log('error: ', ex);
       return done(ex);
@@ -250,12 +258,16 @@ oAuth2Srv.exchange(oauth2orize.exchange.code( (client, code, redirectUri, done) 
 
   co(function *() {
     try {
-        let authCode = yield getCode(code);
+        //let authCode = yield getCode(code);
+        let authCode = yield mongo.getOne('codes', { value : code });
         console.log('authCode: ', authCode);
+
         if (authCode === undefined) { console.log('undefined'); return false; }
         if (client._id.toString() !== authCode.clientId.toString()) { console.log('clientId toString'); return false; }
         if (redirectUri !== authCode.redirectUri) { console.log('redirectUri'); return false; }
+
         return authCode;
+
     } catch (ex) {
           console.log('error: ', ex);
         return null;
@@ -267,7 +279,9 @@ oAuth2Srv.exchange(oauth2orize.exchange.code( (client, code, redirectUri, done) 
 
       co(function *() {
         try {
-            yield removeCode(authCode.value);
+            /*yield removeCode(authCode.value);*/
+            yield mongo.removeOne('codes', { value: authCode.value});
+
             // Create a new access token
             let token = new models.Token(
               utils.uid(256),
@@ -275,14 +289,16 @@ oAuth2Srv.exchange(oauth2orize.exchange.code( (client, code, redirectUri, done) 
               authCode.userId
             );
               
-            yield insertToken(token);
+            /*yield insertToken(token);*/
+            yield mongo.insert('tokens', token);
             return token;
+
         } catch(ex) {
           console.log('error: ', ex);
         }
       }).then( (token) => {
-        done(null, token);
-      });     
+           done(null, token);
+         });     
 
     }
     else {
@@ -316,15 +332,17 @@ oAuth2Srv.grant(oauth2orize.grant.token( (client, user, ares, done) => {
           user._id
         );
      
-        yield insertToken(token);
+        /*yield insertToken(token);*/
+        yield mongo.insert('tokens', token);
         return token;
+
       } catch(ex) {
-        console.log('error: ', ex);
+          console.log('error: ', ex);
       }
     }).then( (token) => {
-      console.log('token inserted: ', token);
-      done(null, token);
-    });     
+        console.log('token inserted: ', token);
+        done(null, token);
+      });     
 
 }));
 
@@ -345,12 +363,16 @@ oAuth2Srv.exchange(oauth2orize.exchange.password((client, username, password, sc
 
     co(function *() {
       try {
-          let localClient = yield getClientById(client.id);
+          /*let localClient = yield getClientById(client.id);*/
+          let localClient = yield mongo.getOne('clients', { id: client.id });
+
           if (localClient === null) { done(null, false); }
           if(localClient.clientSecret !== client.clientSecret) {
               done(null, false);
           }
+
           return localClient;
+
       } catch (ex) {
             console.log('error: ', ex);
           return null;
@@ -362,7 +384,8 @@ oAuth2Srv.exchange(oauth2orize.exchange.password((client, username, password, sc
 
           co(function *() {
             try {
-                let user = yield getUserByUsername(username);
+                /*let user = yield getUserByUsername(username);*/
+                let user = yield mongo.getOne({username: username});
                 if(user === null) {
                     done(null, false);
                 }
@@ -377,16 +400,17 @@ oAuth2Srv.exchange(oauth2orize.exchange.password((client, username, password, sc
                     localClient.userId
                   );
                  
-                  yield insertToken(token);
+                  /*yield insertToken(token);*/
+                  yield mongo.insert('tokens', token);
                   return token;
+
             } catch(ex) {
               console.log('error: ', ex);
             }
           }).then((token) => {
-            console.log('returned token: ', token);
-            done(null, token);
-          });     
-
+              console.log('returned token: ', token);
+              done(null, token);
+            });     
         }
         else {
           console.log('either user NOT found, or client id mismatch, or redirect UTL mismatch.');
@@ -407,7 +431,9 @@ oAuth2Srv.exchange(oauth2orize.exchange.clientCredentials( (client, scope, done)
     //Validate the client
     co (function *() {
       try {
-        let localClient = yield getClient(client.clientId);
+        /*let localClient = yield getClient(client.clientId);*/
+        let localClient = yield mongo.getById('clients', client.clientId);
+
         if(localClient === null) {
           done(null, false);
         }
@@ -423,16 +449,18 @@ oAuth2Srv.exchange(oauth2orize.exchange.clientCredentials( (client, scope, done)
           null
         );
              
-        yield insertToken(token);
+        /*yield insertToken(token);*/
+        yield mongo.insert('tokens', token);
+
         return token;
       } catch (ex) {
         console.log('error client credentials: ', ex);
       }
 
     }).then( () => {
-      console.log('returned token: ', token);
-      done(null, token);
-    }); 
+        console.log('returned token: ', token);
+        done(null, token);
+      }); 
 
 }));
 
@@ -446,8 +474,11 @@ exports.authorization = compose([
     
     co(function *() {
         try {
-          let client = yield getClientById(clientId);
+          /*let client = yield getClientById(clientId);*/
+          let client = yield mongo.getOne('clients', { id: clientId });
+
           return client;      
+
         } catch (ex) {
           console.log('error: ', ex);
           //return null;

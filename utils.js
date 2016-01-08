@@ -1,9 +1,13 @@
+'use strict';
+
+let bcrypt = require('co-bcrypt');
+
 exports.uid = function (len) {
-  var buf = []
+  let buf = []
     , chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
     , charlen = chars.length;
 
-  for (var i = 0; i < len; ++i) {
+  for (let i = 0; i < len; ++i) {
     buf.push(chars[getRandomInt(0, charlen - 1)]);
   }
 
@@ -13,3 +17,9 @@ exports.uid = function (len) {
 function getRandomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
+
+exports.hashPassword = function * hashPassword(password) {
+		console.log('this: ', this);		
+		let salt = yield bcrypt.genSalt(10);
+		return yield bcrypt.hash(password, salt);	
+	}

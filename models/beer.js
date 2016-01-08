@@ -8,8 +8,8 @@ let beerModel = class Beer {
 	}
 
 	toString() {
-  	return '(' + this.value + ', ' + this.type + ', ' + this.qty + ')';
-  }
+  		return this._id === null ? '(' + this.value + ', ' + this.type + ', ' + this.qty + ')' : '(' + this.value + ', ' + this.type + ', ' + this.qty + ')';
+  	}
 
 }
 

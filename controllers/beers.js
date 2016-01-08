@@ -1,29 +1,27 @@
 'use strict';
 
-let koaRouter = require('koa-router'),	
-	db = require('../lib/mongodb.js'),
-	service = require('../lib/genericCoMonkApi.js'),
+let koaRouter = require('koa-router'),		
+	mongo = require('../lib/genericCoMonkApi.js'),
+	beerModel = require('../lib/models.js').Beer,
 	auth = require('../auth.js');
 
 let beersRouter = koaRouter();
 
 
-/*beersRouter.get('/api/beers', auth.isAuthenticated, function* (next) {
-
-	try {
-		this.body = yield db.beers.find({});
-		this.type = 'json';
-		this.status = 200;
-	} catch(ex) {
-		console.log('Error: ', ex);
+function *checkAccessDenied(next) {	
+	if (this.query.error === 'access_denied') {
+		this.throw(this.query.error, 400);
 	}
+	else {
+		console.log('next', next);
+		yield next;
+	}
+}
 
-});*/
-
-beersRouter.get('/api/beers', auth.isAuthenticated, function* (next) {
+beersRouter.get('/api/beers', checkAccessDenied, auth.isAuthenticated, function* () {
 
 	try {
-		this.body = yield service.getAll('beers');
+		this.body = yield mongo.getAll('beers');
 		this.type = 'json';
 		this.status = 200;
 	} catch(ex) {
@@ -35,7 +33,7 @@ beersRouter.get('/api/beers', auth.isAuthenticated, function* (next) {
 beersRouter.get('/api/beers/:id', auth.isAuthenticated, function* (next) {
 
 	try {
-		this.body = yield db.beers.findById(this.params.id);
+		this.body = yield mongo.getById('beers', this.params.id);
 		this.type = 'json';
 		this.status = 200;
 	} catch(ex) {
@@ -48,7 +46,7 @@ beersRouter.put('/api/beers/:id', auth.isAuthenticated, function* (next) {
 
 	try {
 		if (this.request.body.qty) {
-			yield db.beers.updateById(this.params.id, { $set: { qty: this.request.body.qty } });
+			yield mongo.update('beers', this.params.id, { qty: this.request.body.qty } );
 			this.type = 'json';
 			this.status = 200;	
 		}
@@ -62,7 +60,7 @@ beersRouter.put('/api/beers/:id', auth.isAuthenticated, function* (next) {
 beersRouter.del('/api/beers/:id', auth.isAuthenticated, function* (next) {
 
 	try {		
-		yield db.beers.remove({ _id: this.params.id });
+		yield mongo.removeOne('beers', { _id: this.params.id } );
 		this.type = 'json';
 		this.status = 204;		
 	} catch(ex) {
@@ -74,20 +72,22 @@ beersRouter.del('/api/beers/:id', auth.isAuthenticated, function* (next) {
 
 beersRouter.post('/api/beers', auth.isAuthenticated, function* (next) {	
 	
-	let beer = this.request.body;
-	console.log(beer);
-	//this.body = beer;
+	let body = this.request.body;
+	
+	let beerModelParams = Object.keys(body).map( (k) => body[k] );	
 
+	let beer = new beerModel(...beerModelParams);
+	
 	if (!beer.name) {
-	    throw('name required', 400);
+	    this.throw('name required', 400);
 	}
 
 	if (!beer.type) {
-	    throw('type required', 400);
+	    this.throw('type required', 400);
 	}
 
 	try {
-		yield db.beers.insert(beer);
+		yield mongo.insert('beers', beer);
 		this.status = 201;
 	} catch(ex) {
 		console.log('Error: ', ex);

@@ -2,7 +2,6 @@
 
 let passport = require('koa-passport'),
 	koaRouter = require('koa-router'),	
-	db = require('../lib/mongodb.js'),
 	auth = require('../auth.js');
 
 let mainRouter = koaRouter();
