@@ -527,4 +527,4 @@ exports.token = compose([
 exports.isAuthenticated = passport.authenticate(['basic', 'bearer'], { session : false });
 exports.isClientBasicAuthenticated = passport.authenticate('client-basic', { session : false });
 /*exports.isClientPasswordAuthenticated = passport.authenticate('oauth2-client-password', { session : false });*/
-//exports.isBearerAuthenticated = passport.authenticate('bearer', { session: false });
+exports.isBearerAuthenticated = passport.authenticate('bearer', { session: false });
