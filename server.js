@@ -1,12 +1,11 @@
 'use strict';
 
-let koa = require('koa'),
-	koaRouter = require('koa-router');
+let koa = require('koa');	
 
 let app = koa(),
 	port = process.env.PORT || 3000;
 
-// Controllers/Routers
+// Routers
 let 
 	beersRoutes = require('./controllers/beers.js'),
 	mainRoutes = require('./controllers/main.js'),
@@ -15,7 +14,7 @@ let
 	usersRoutes = require('./controllers/users.js');
 	
 // trust proxy
-//app.proxy = true;
+app.proxy = true;
 
 // append view renderer
 let views = require('koa-views');
@@ -33,6 +32,7 @@ let session = require('koa-session');
 app.keys = ['s3cr3tk3y'];
 app.use(session(app));
 
+// Passport
 let passport = require('koa-passport');
 app.use(passport.initialize());
 app.use(passport.session());

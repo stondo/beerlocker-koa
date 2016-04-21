@@ -2,72 +2,14 @@
 
 let passport = require('koa-passport'),    
     co = require('co'),
-    mongo = require('./lib/genericCoMonkApi.js'),    
-
-    /*db = require('./lib/mongodb.js'),  */
-
+    mongo = require('./lib/genericCoMonkApi.js'),       
     models = require('./lib/models.js'),
     bcrypt = require('co-bcrypt'),
     oauth2orize = require('koa-oauth2orize'),
+    jwtBearer = require('oauth2orize-jwt-bearer').Exchange,    
     login = require("koa-ensure-login"),
     utils = require('./utils.js'),
     compose = require('koa-compose');
-
-
-/*// User
-function *getUserByUsername(username) {
-  let user = yield db.users.findOne({ username: username });
-  return user;
-};
-
-function *getUser(userId) {
-  let user = yield db.users.findById(userId);
-  return user;
-};
-
-
-// Client
-function *getClient(id) {
-  let client = yield db.clients.findById(id);
-  return client;
-};
-
-function *getClientById(id) {
-  let client = yield db.clients.findOne({ id: id });
-  return client;
-};
-
-function *getClientByClientName(username) {
-  console.log(username);
-  let client = yield db.clients.findOne({ id: username });
-  return client
-};
-
-
-// Code
-function *getCode(code) {  
-  let res = yield db.codes.findOne({ value: code});  
-  return res;
-};
-
-function *insertCode(code) {
-  return yield db.codes.insert(code);  
-};
-
-function *removeCode(code) {
-  return yield db.codes.remove({ value: code });  
-};
-
-
-// Token
-function *getToken(accessToken) {
-  let token = yield db.tokens.findOne({ value: accessToken });
-  return token;
-};
-
-function *insertToken(token) {
-  return yield db.tokens.insert(token);  
-};*/
 
 
 
@@ -104,10 +46,9 @@ passport.use(new LocalStrategy(function(username, password, done) {
 
 let BasicStrategy = require('passport-http').BasicStrategy;
 passport.use('basic', new BasicStrategy( (username, password, done) => {
-  console.log('passo da basic');
+  console.log('basic strategy');
   co(function *() {
     try {
-      /*let user = yield getUserByUsername(username);*/
       let user = yield mongo.getOne('users', { username : username });
       if (yield bcrypt.compare(password, user.password)) {
         return user;
@@ -127,13 +68,12 @@ passport.use('basic', new BasicStrategy( (username, password, done) => {
 
 // Client basic
 let ClientBasicStrategy = require('passport-http').BasicStrategy;
-//console.log('BASIC STRATEGY: ', ClientBasicStrategy);
+
 passport.use('client-basic', new ClientBasicStrategy( (username, password, done) => {
-  console.log('passo da client basic');
+  console.log('client basic strategy');
   co(function *() {
-    try {
-      /*let client = yield getClientByClientName(username);*/
-      console.log(username);
+    try {      
+      console.log('username&password', username, password);
       let client = yield mongo.getOne('clients', { id : username });
       console.log('client: ', client);
       if (yield bcrypt.compare(password, client.secret)) {
@@ -149,49 +89,68 @@ passport.use('client-basic', new ClientBasicStrategy( (username, password, done)
     }
   }).then((client) => {
     console.log('client found client-basic: ', client);
-    done(null, client);
+    return done(null, client);
   });
   
 }));
 
-//require('./authBearer.js');
+
 let BearerStrategy = require('passport-http-bearer').Strategy;
-//console.log('BEARER STRATEGY: ', BearerStrategy);
+
 passport.use('bearer', new BearerStrategy( (accessToken, done) => {
-  console.log('passo da bearer');
+  console.log('bearer strategy');
   co(function *() {
-    try {
-      /*let token = yield getToken(accessToken);*/
+    try {      
       let token = yield mongo.getOne('tokens', { value: accessToken });
+      
       console.log('token found: ', token, token.userId);
-      //let user = yield getUser(token.userId);
 
-      /*let client = yield getClient(token.clientId);*/
-      let client = yield mongo.getOne('clients', { _id: token.clientId} );
-      console.log('client found: ', client);
+      if (!token) {
+        return done(null, false);
+      }
 
-      return client;      
+      let user = yield mongo.getById('users', token.userId);
+
+      if (!user) {
+        return done(null, false);
+      }      
+
+      return user;      
 
     } catch (ex) {
       console.log('error: ', ex);
       return null;
     }
-  }).then((client) => {
-    console.log('client found bearer: ', client);
-    done(null, client);
+  }).then((user) => {
+    console.log('user found bearer: ', user);
+    done(null, user);
   });
   
 }));
+
+
+// JWT Strategy
+let ClientJWTBearerStrategy = require('passport-oauth2-jwt-bearer').Strategy;
+passport.use('oauth2-jwt-bearer', new ClientJWTBearerStrategy(
+  function(claimSetIss, done) {
+
+    console.log('claimSetIss: ', claimSetIss);
+
+    /*Clients.findOne({ clientId: claimSetIss }, function (err, client) {
+      if (err) { return done(err); }
+      if (!client) { return done(null, false); }
+      return done(null, client);
+    });*/
+  }
+));
 
 
 // Create OAuth 2.0 server
 let oAuth2Srv = oauth2orize.createServer();
 
 // Register serialialization function
-oAuth2Srv.serializeClient((client, done) => {
-  //done(null, client._id);
-  console.log('SERIALIZING CLIENT', client);
-  // done(null, client._id);
+oAuth2Srv.serializeClient((client, done) => {  
+  console.log('SERIALIZING CLIENT', client);  
   done(null, client.id);
 });
 
@@ -199,13 +158,11 @@ oAuth2Srv.serializeClient((client, done) => {
 oAuth2Srv.deserializeClient((id, done) => {
   console.log('DESERIALIZING CLIENT', id);
   co(function *() {
-    try {      
-      //let client = yield getClientById(id);
+    try {            
       let client = yield mongo.getOne('clients', { id: id });
       return client;      
     } catch (ex) {
-      console.log('error: ', ex);
-      //return null;
+      console.log('error: ', ex);      
       return done(ex);
     }
   }).then((client) => {
@@ -214,6 +171,33 @@ oAuth2Srv.deserializeClient((id, done) => {
   }); 
 
 });
+
+// JWT
+oAuth2Srv.exchange('urn:ietf:params:oauth:grant-type:jwt-bearer', jwtBearer(function(client, data, signature, done) {
+ let crypto = require('crypto')
+   , fs = require('fs') //load file system so you can grab the public key to read.
+   , pub = fs.readFileSync('./public.pem').toString() //load PEM format public key as string, should be clients public key
+   , verifier = crypto.createVerify("RSA-SHA256");
+
+ //verifier.update takes in a string of the data that is encrypted in the signature  
+ verifier.update(JSON.stringify(data));
+
+ if (verifier.verify(pub, signature, 'base64')) {
+   //base64url decode data 
+   let b64string = data;
+   let buf = new Buffer(b64string, 'base64').toString('ascii');
+
+   // TODO - verify client_id, scope and expiration are valid from the buf variable above
+
+   console.log('AccessToken: ', AccessToken);
+
+   /*AccessToken.create(client, scope, function(err, accessToken) {
+     if (err) { return done(err); }
+     done(null, accessToken);
+   });*/
+ }
+}));
+
 
 // Register authorization code grant type
 oAuth2Srv.grant(oauth2orize.grant.code( (client, redirectUri, user, ares, done) => {
@@ -233,13 +217,11 @@ oAuth2Srv.grant(oauth2orize.grant.code( (client, redirectUri, user, ares, done) 
  
   // Save the auth code and check for errors
   co(function *() {
-    try {
-      /*yield insertCode(code);*/
+    try {      
       yield mongo.insert('codes', code);
     } catch (ex) {
       console.log('error: ', ex);
-      return done(ex);
-      //return null;
+      return done(ex);      
     }
   }).then(() => {
     console.log('code inserted succesfully.: ', code.value);
@@ -257,12 +239,12 @@ oAuth2Srv.exchange(oauth2orize.exchange.code( (client, code, redirectUri, done) 
   console.log('redirecturi: ', redirectUri);
 
   co(function *() {
-    try {
-        //let authCode = yield getCode(code);
+    try {        
         let authCode = yield mongo.getOne('codes', { value : code });
         console.log('authCode: ', authCode);
+        console.log('client: ', client);
 
-        if (authCode === undefined) { console.log('undefined'); return false; }
+        if (authCode === null) { console.log('authCOde is null'); return false; }
         if (client._id.toString() !== authCode.clientId.toString()) { console.log('clientId toString'); return false; }
         if (redirectUri !== authCode.redirectUri) { console.log('redirectUri'); return false; }
 
@@ -278,8 +260,7 @@ oAuth2Srv.exchange(oauth2orize.exchange.code( (client, code, redirectUri, done) 
     if (authCode) {   
 
       co(function *() {
-        try {
-            /*yield removeCode(authCode.value);*/
+        try {            
             yield mongo.removeOne('codes', { value: authCode.value});
 
             // Create a new access token
@@ -288,8 +269,7 @@ oAuth2Srv.exchange(oauth2orize.exchange.code( (client, code, redirectUri, done) 
               authCode.clientId,
               authCode.userId
             );
-              
-            /*yield insertToken(token);*/
+                          
             yield mongo.insert('tokens', token);
             return token;
 
@@ -331,8 +311,7 @@ oAuth2Srv.grant(oauth2orize.grant.token( (client, user, ares, done) => {
           client.clientId,
           user._id
         );
-     
-        /*yield insertToken(token);*/
+             
         yield mongo.insert('tokens', token);
         return token;
 
@@ -362,8 +341,7 @@ oAuth2Srv.exchange(oauth2orize.exchange.password((client, username, password, sc
 
 
     co(function *() {
-      try {
-          /*let localClient = yield getClientById(client.id);*/
+      try {     
           let localClient = yield mongo.getOne('clients', { id: client.id });
 
           if (localClient === null) { done(null, false); }
@@ -383,8 +361,7 @@ oAuth2Srv.exchange(oauth2orize.exchange.password((client, username, password, sc
         if (localClient) {   
 
           co(function *() {
-            try {
-                /*let user = yield getUserByUsername(username);*/
+            try {           
                 let user = yield mongo.getOne({username: username});
                 if(user === null) {
                     done(null, false);
@@ -399,8 +376,7 @@ oAuth2Srv.exchange(oauth2orize.exchange.password((client, username, password, sc
                     localClient.clientId,
                     localClient.userId
                   );
-                 
-                  /*yield insertToken(token);*/
+                                  
                   yield mongo.insert('tokens', token);
                   return token;
 
@@ -430,8 +406,7 @@ oAuth2Srv.exchange(oauth2orize.exchange.clientCredentials( (client, scope, done)
 
     //Validate the client
     co (function *() {
-      try {
-        /*let localClient = yield getClient(client.clientId);*/
+      try {        
         let localClient = yield mongo.getById('clients', client.clientId);
 
         if(localClient === null) {
@@ -448,8 +423,7 @@ oAuth2Srv.exchange(oauth2orize.exchange.clientCredentials( (client, scope, done)
           localClient.clientId,
           null
         );
-             
-        /*yield insertToken(token);*/
+                
         yield mongo.insert('tokens', token);
 
         return token;
@@ -470,13 +444,12 @@ exports.authorization = compose([
   login.ensureLoggedIn(),
   oAuth2Srv.authorization( (clientId, redirectUri, done) => {
 
-    console.log('dentro authorization: ', clientId, redirectUri);
+    console.log('inside authorization: ', clientId, redirectUri);
     
     co(function *() {
-        try {
-          /*let client = yield getClientById(clientId);*/
+        try {          
           let client = yield mongo.getOne('clients', { id: clientId });
-
+          console.log('client: ', client);
           return client;      
 
         } catch (ex) {
@@ -521,6 +494,7 @@ exports.decision = compose([
 exports.token = compose([
   oAuth2Srv.errorHandler(),
   //passport.authenticate(["basic", "oauth2-client-password"], { session: false }),
+  //passport.authenticate(['oauth2-jwt-bearer'], { session: false }),
   oAuth2Srv.token()
 ]);
 

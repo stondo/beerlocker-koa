@@ -8,20 +8,10 @@ let koaRouter = require('koa-router'),
 let beersRouter = koaRouter();
 
 
-function *checkAccessDenied(next) {	
-	if (this.query.error === 'access_denied') {
-		this.throw(this.query.error, 400);
-	}
-	else {
-		console.log('next', next);
-		yield next;
-	}
-}
+beersRouter.get('/api/beers', auth.isAuthenticated, function* () {
 
-beersRouter.get('/api/beers', checkAccessDenied, auth.isAuthenticated, function* () {
-
-	try {
-		this.body = yield mongo.getAll('beers');
+	try {		
+		this.body = yield mongo.getAllByFilter('beers', { userId: this.req.user._id });
 		this.type = 'json';
 		this.status = 200;
 	} catch(ex) {
@@ -32,8 +22,8 @@ beersRouter.get('/api/beers', checkAccessDenied, auth.isAuthenticated, function*
 
 beersRouter.get('/api/beers/:id', auth.isAuthenticated, function* (next) {
 
-	try {
-		this.body = yield mongo.getById('beers', this.params.id);
+	try {		
+		this.body = yield mongo.getAllByFilter('beers', { userId: this.req.user._id, _id: this.params.id });
 		this.type = 'json';
 		this.status = 200;
 	} catch(ex) {
@@ -44,9 +34,16 @@ beersRouter.get('/api/beers/:id', auth.isAuthenticated, function* (next) {
 
 beersRouter.put('/api/beers/:id', auth.isAuthenticated, function* (next) {
 
+	console.log('params', this.params.id, this.req.user._id);
+
 	try {
-		if (this.request.body.qty) {
-			yield mongo.update('beers', this.params.id, { qty: this.request.body.qty } );
+		if (this.request.body.quantity) {
+					
+			yield mongo.updateByFilter('beers', { _id: this.params.id, userId: this.req.user._id }, { quantity: this.request.body.quantity } );
+			
+			let beer = yield mongo.getOne('beers', { _id: this.params.id, userId: this.req.user._id });
+
+			this.body = beer;
 			this.type = 'json';
 			this.status = 200;	
 		}
@@ -60,9 +57,10 @@ beersRouter.put('/api/beers/:id', auth.isAuthenticated, function* (next) {
 beersRouter.del('/api/beers/:id', auth.isAuthenticated, function* (next) {
 
 	try {		
-		yield mongo.removeOne('beers', { _id: this.params.id } );
+		yield mongo.removeOne('beers', { _id: this.params.id, userId: this.req.user._id });
+		this.body = { message: 'Beer removed from the locker!' };
 		this.type = 'json';
-		this.status = 204;		
+		this.status = 200;		
 	} catch(ex) {
 		console.log('Error: ', ex);
 	}
@@ -86,8 +84,16 @@ beersRouter.post('/api/beers', auth.isAuthenticated, function* (next) {
 	    this.throw('type required', 400);
 	}
 
+	if (!beer.quantity) {
+	    this.throw('quantity required', 400);
+	}
+
+	beer.userId = this.req.user._id;
+
 	try {
 		yield mongo.insert('beers', beer);
+		this.body = { message: 'Beer added to the locker!', data: beer };
+		this.type = 'json';
 		this.status = 201;
 	} catch(ex) {
 		console.log('Error: ', ex);

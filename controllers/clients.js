@@ -8,19 +8,7 @@ let koaRouter = require('koa-router'),
 let clientsRouter = koaRouter();
 
 
-/*clientsRouter.get('/api/clients', auth.isAuthenticated, function* (next) {
-
-	try {
-		this.body = yield clients.find({});
-		this.type = 'json';
-		this.status = 200;
-	} catch(ex) {
-		console.log('Error: ', ex);
-	}
-
-});*/
-
-clientsRouter.get('/api/clients', auth.isAuthenticated, function* (next) {
+clientsRouter.get('/api/clients', auth.isAuthenticated, function* (next) {	
 
 	try {		
 		this.body = yield mongo.getOne('clients', { userId: this.req.user._id });
@@ -32,37 +20,11 @@ clientsRouter.get('/api/clients', auth.isAuthenticated, function* (next) {
 	
 });
 
-/*clientsRouter.put('/api/clients/:id', auth.isAuthenticated, koaBody, function* (next) {
-
-	try {
-		if (this.request.body.qty) {
-			yield clients.updateById(this.params.id, { $set: { qty: this.request.body.qty } });
-			this.type = 'json';
-			this.status = 200;	
-		}
-		
-	} catch(ex) {
-		console.log('Error: ', ex);
-	}
-
-});*/
-
-/*clientsRouter.del('/api/clients/:id', auth.isAuthenticated, koaBody, function* (next) {
-
-	try {		
-		yield clients.remove({ _id: this.params.id });
-		this.type = 'json';
-		this.status = 204;		
-	} catch(ex) {
-		console.log('Error: ', ex);
-	}
-
-});*/
-
 
 clientsRouter.post('/api/clients', auth.isAuthenticated, function* (next) {	
 
-	//console.log('req user id', this.req.user._id);
+	console.log('req user id', this.req.user._id);
+
 	let body = this.request.body;
 	body.userId = this.req.user._id;
 
@@ -86,11 +48,12 @@ clientsRouter.post('/api/clients', auth.isAuthenticated, function* (next) {
 		this.throw('id userId', 400);
 	}	
 	
-	client.hashSecret();
-
+	yield client.hashSecret();
 	
 	try {
 		yield mongo.insert('clients', client);
+		this.body = { message: 'Client added to the locker!', data: client };
+		this.type = 'json';
 		this.status = 201;
 	} catch(ex) {
 		console.log('Error: ', ex);

@@ -1,16 +1,17 @@
 'use strict';
 
 let beerModel = class Beer {
-	constructor(name, type, qty) {
+	constructor(name, type, quantity, userId) {
 		this.name = name;
-		this.type = type;  		
-		this.qty = qty;
+		this.type = type;
+		this.quantity = quantity;
+		this.userId = userId;
 	}
 
 	toString() {
-  		return this._id === null ? '(' + this.value + ', ' + this.type + ', ' + this.qty + ')' : '(' + this.value + ', ' + this.type + ', ' + this.qty + ')';
-  	}
-
+		return '(' + this.value + ', ' + this.type + ', ' + this.quantity + ', ' + this.userId + ')';
+	}
 }
+
 
 module.exports = beerModel;
