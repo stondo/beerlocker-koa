@@ -1,2 +1,6 @@
 node_modules/
 npm-debug.log
+private.pem
+public.pem
+signed
+
